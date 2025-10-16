@@ -1,59 +1,222 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
 <head>
-  <meta charset='UTF-8'>
-  <title>Ghost SQL Import</title>
-  <style>
-    body{font-family:sans-serif;background:#667eea;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-    .container{background:white;padding:40px;border-radius:12px;max-width:600px;width:100%}
-    h1{margin-bottom:30px}
-    input[type=file]{width:100%;padding:15px;border:2px dashed #ddd;border-radius:8px;margin:20px 0}
-    button{width:100%;background:#667eea;color:white;border:none;padding:16px;border-radius:8px;font-size:16px;cursor:pointer}
-    button:disabled{background:#ccc}
-    #log{background:#1e1e1e;color:#d4d4d4;padding:20px;border-radius:8px;font-family:monospace;font-size:13px;max-height:400px;overflow-y:auto;margin-top:20px;display:none}
-    .success{color:#4ec9b0}
-    .error{color:#f48771}
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ghost SQL Importer</title>
+<style>
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  margin: 0;
+}
+.container {
+  background: white;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  max-width: 600px;
+  width: 100%;
+}
+h1 {
+  color: #333;
+  margin: 0 0 30px 0;
+}
+.warning {
+  background: #fff3cd;
+  border-left: 4px solid #ffc107;
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 30px;
+  font-size: 14px;
+}
+input[type="file"] {
+  width: 100%;
+  padding: 15px;
+  border: 2px dashed #ddd;
+  border-radius: 8px;
+  margin: 20px 0;
+  cursor: pointer;
+}
+#fileInfo {
+  color: #666;
+  font-size: 14px;
+  margin: 10px 0;
+  min-height: 20px;
+}
+button {
+  width: 100%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  margin-top: 20px;
+}
+button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+#progress {
+  margin: 20px 0;
+  display: none;
+}
+.progress-bar {
+  width: 100%;
+  height: 40px;
+  background: #f0f0f0;
+  border-radius: 20px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  width: 0%;
+  transition: width 0.3s;
+}
+#log {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 20px;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 13px;
+  max-height: 400px;
+  overflow-y: auto;
+  margin-top: 20px;
+  display: none;
+}
+.log-success { color: #4ec9b0; }
+.log-error { color: #f48771; }
+.log-info { color: #9cdcfe; }
+</style>
 </head>
 <body>
-  <div class='container'>
-    <h1>Ghost SQL Importer</h1>
-    <input type='file' id='file' accept='.sql' multiple>
-    <button id='btn' disabled>Select Files First</button>
-    <div id='log'></div>
+<div class="container">
+  <h1>🗄️ Ghost SQL Importer</h1>
+  
+  <div class="warning">
+    <strong>⚠️ Warning:</strong> This will overwrite existing data!
   </div>
-  <script>
-    let files=[];
-    document.getElementById('file').onchange=e=>{
-      files=Array.from(e.target.files).sort((a,b)=>a.name.localeCompare(b.name));
-      document.getElementById('btn').disabled=!files.length;
-      document.getElementById('btn').textContent=files.length?' Start Import ('+files.length+' files)':'Select Files First';
-    };
-    document.getElementById('btn').onclick=async()=>{
-      if(!files.length||!confirm('Import '+files.length+' files?'))return;
-      const btn=document.getElementById('btn'),log=document.getElementById('log');
-      btn.disabled=true;
-      btn.textContent='Importing...';
-      log.style.display='block';
-      log.innerHTML='';
-      for(let i=0;i<files.length;i++){
-        const f=files[i];
-        log.innerHTML+='<div>['+(i+1)+'/'+files.length+'] '+f.name+'...</div>';
-        try{
-          const fd=new FormData();
-          fd.append('sqlFile',f);
-          const r=await fetch('/import',{method:'POST',body:fd});
-          const d=await r.json();
-          log.innerHTML+='<div class="'+(d.success?'success':'error')+'">'+(d.success?'✅':'❌')+' '+f.name+'</div>';
-        }catch(e){
-          log.innerHTML+='<div class="error">❌ '+f.name+': '+e.message+'</div>';
-        }
-        log.scrollTop=log.scrollHeight;
+
+  <input type="file" id="fileInput" accept=".sql" multiple>
+  <div id="fileInfo"></div>
+
+  <button id="importBtn" disabled>Select files first</button>
+
+  <div id="progress">
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill">0%</div>
+    </div>
+  </div>
+
+  <div id="log"></div>
+</div>
+
+<script>
+let selectedFiles = [];
+
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  selectedFiles = Array.from(e.target.files).sort(function(a, b) {
+    return a.name.localeCompare(b.name);
+  });
+  
+  const fileInfo = document.getElementById('fileInfo');
+  const importBtn = document.getElementById('importBtn');
+  
+  if (selectedFiles.length > 0) {
+    const totalSize = selectedFiles.reduce(function(acc, f) {
+      return acc + f.size;
+    }, 0);
+    const sizeMB = (totalSize / (1024 * 1024)).toFixed(2);
+    
+    fileInfo.textContent = 'Selected ' + selectedFiles.length + ' files, total: ' + sizeMB + ' MB';
+    importBtn.disabled = false;
+    importBtn.textContent = 'Start Import';
+  }
+});
+
+document.getElementById('importBtn').addEventListener('click', async function() {
+  if (selectedFiles.length === 0) {
+    alert('Please select files first!');
+    return;
+  }
+
+  if (!confirm('Import ' + selectedFiles.length + ' files?')) {
+    return;
+  }
+
+  const btn = this;
+  const progress = document.getElementById('progress');
+  const logDiv = document.getElementById('log');
+  const progressFill = document.getElementById('progressFill');
+  
+  btn.disabled = true;
+  btn.textContent = 'Importing...';
+  progress.style.display = 'block';
+  logDiv.style.display = 'block';
+  logDiv.innerHTML = '';
+
+  addLog('Starting import of ' + selectedFiles.length + ' files...', 'info');
+
+  for (let i = 0; i < selectedFiles.length; i++) {
+    const file = selectedFiles[i];
+    const percent = Math.round(((i + 1) / selectedFiles.length) * 100);
+    
+    progressFill.style.width = percent + '%';
+    progressFill.textContent = '[' + (i + 1) + '/' + selectedFiles.length + '] Processing...';
+    
+    addLog('[' + (i + 1) + '/' + selectedFiles.length + '] Importing: ' + file.name, 'info');
+
+    try {
+      const formData = new FormData();
+      formData.append('sqlFile', file);
+
+      const response = await fetch('/import', {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        addLog('✅ ' + file.name + ' - Success', 'success');
+      } else {
+        addLog('❌ ' + file.name + ' - Failed: ' + result.error, 'error');
       }
-      log.innerHTML+='<div class="success">🎉 Done!</div>';
-      btn.textContent='Import Again';
-      btn.disabled=false;
-    };
-  </script>
+    } catch (error) {
+      addLog('❌ ' + file.name + ' - Error: ' + error.message, 'error');
+    }
+  }
+
+  progressFill.textContent = 'Complete!';
+  addLog('🎉 Import completed!', 'success');
+  btn.disabled = false;
+  btn.textContent = 'Import Again';
+});
+
+function addLog(message, type) {
+  const logDiv = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = 'log-' + type;
+  const time = new Date().toLocaleTimeString();
+  line.textContent = '[' + time + '] ' + message;
+  logDiv.appendChild(line);
+  logDiv.scrollTop = logDiv.scrollHeight;
+}
+</script>
 </body>
 </html>
